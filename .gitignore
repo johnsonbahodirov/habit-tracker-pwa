@@ -1,0 +1,54 @@
+# HabitFlow
+
+A lightweight offline-first habit tracker PWA built with vanilla HTML, CSS, and JavaScript modules.
+
+## Features
+
+- IndexedDB data storage with schema-friendly module structure
+- Offline-first PWA using service worker cache
+- Installable manifest for desktop and mobile
+- Multiple habit types: yes/no, counter, numeric, timer, checklist
+- Scheduling options: daily, weekdays, weekly, monthly, every N days
+- Daily journal, streak tracking, stats, heatmap, and XP system
+- Backup and restore with JSON export/import and encrypted backup support
+- Light/dark/auto theme, accent color, language support, custom PIN lock
+- Keyboard shortcuts and responsive mobile + desktop layout
+
+## Run locally
+
+1. Open the project folder in a terminal.
+2. Run:
+   python3 -m http.server 8000
+3. Open:
+   http://localhost:8000/
+
+## Deploy to GitHub Pages
+
+1. Push this repository to GitHub.
+2. In GitHub, open Settings > Pages.
+3. Set the source to `Deploy from a branch`.
+4. Choose the `main` branch and `/ (root)` folder.
+5. Save.
+6. GitHub will provide a Pages URL for your app.
+
+## File tree
+
+- `index.html`
+- `manifest.webmanifest`
+- `sw.js`
+- `css/styles.css`
+- `js/app.js`
+- `js/db.js`
+- `js/state.js`
+- `js/ui.js`
+- `js/stats.js`
+- `js/i18n.js`
+- `js/notifications.js`
+- `js/backup.js`
+- `icons/icon.svg`
+
+## Notes
+
+- The app stores all real data in IndexedDB, not localStorage.
+- It works offline after the first load.
+- Some advanced features are intentionally lightweight and optimized for a no-build static deployment.
