@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark"><meta name="theme-color" content="#6366f1">
+<title>Habit Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%236366f1'/%3E%3Cpath d='M150 270l70 70 150-160' fill='none' stroke='%23fff' stroke-width='44' stroke-linecap='round'/%3E%3C/svg%3E"><style>
+:root{--bg:#f6f7fb;--c:#fff;--t:#1b1d2a;--m:#6b7080;--a:#6366f1;--b:#e5e7f0;--ok:#22c55e}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1117;--c:#181b25;--t:#eef0f7;--m:#9aa0b4;--b:#2a2e3d}}
+:root[data-theme=dark]{--bg:#0f1117;--c:#181b25;--t:#eef0f7;--m:#9aa0b4;--b:#2a2e3d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 0}
+.top{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--b)}
+h1{font-size:1.15rem;margin:0}.top>div{display:flex;gap:8px}
+.btn{background:var(--a);color:#fff;border:0;border-radius:999px;padding:9px 16px;font-weight:600;cursor:pointer}
+.ghost,.ic{background:var(--c);color:var(--t);border:1px solid var(--b);border-radius:999px;padding:8px 14px;cursor:pointer}
+.layout{display:flex;max-width:1100px;margin:auto}
+.nav{display:flex;flex-direction:column;gap:4px;width:200px;padding:16px;position:sticky;top:60px;align-self:flex-start}
+.nav a{padding:10px 12px;border-radius:12px;color:var(--t);text-decoration:none}
+.nav a.on{background:var(--c);box-shadow:0 0 0 1px var(--b);color:var(--a);font-weight:600}
+main{flex:1;padding:16px;min-width:0}
+.card{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:14px;margin-bottom:10px}
+.h{display:flex;align-items:center;gap:12px}.h .e{font-size:1.6rem}.h .n{flex:1}.h small{color:var(--m)}
+.chk{width:40px;height:40px;border-radius:50%;border:2px solid var(--b);background:none;color:#fff;font-size:1.2rem;cursor:pointer}
+.chk.done{background:var(--ok);border-color:var(--ok)}
+.bar{height:6px;background:var(--b);border-radius:9px;margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--a)}
+.step{display:flex;gap:6px}.step button{width:34px;height:34px;border-radius:10px;border:1px solid var(--b);background:var(--c);color:var(--t);font-size:1.1rem}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.grid div{aspect-ratio:1;border-radius:8px;background:var(--b);display:grid;place-items:center;font-size:.75rem}
+.grid .l1{background:#a5b4fc}.grid .l2{background:var(--a);color:#fff}.grid .l3{background:var(--ok);color:#fff}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.kp b{font-size:1.6rem;display:block}
+dialog{border:1px solid var(--b);border-radius:18px;background:var(--c);color:var(--t);width:min(440px,92vw)}
+dialog::backdrop{background:#0008}label{display:block;margin:10px 0;color:var(--m);font-size:.85rem}
+input,select{display:block;width:100%;margin-top:4px;padding:10px;border-radius:10px;border:1px solid var(--b);background:var(--bg);color:var(--t);font:inherit}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+#toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--t);color:var(--bg);padding:8px 16px;border-radius:99px;opacity:0;transition:.2s;pointer-events:none}#toast.s{opacity:1}
+@media(max-width:700px){.nav{position:fixed;bottom:0;left:0;right:0;top:auto;width:auto;flex-direction:row;justify-content:space-around;background:var(--c);border-top:1px solid var(--b);padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:6}
+.nav a{display:flex;flex-direction:column;align-items:center;font-size:.7rem;padding:6px}main{padding-bottom:90px}}
+</style></head>
+<body><div id="app">
+<header class="top"><h1>✨ Habit Tracker</h1>
+<div><button id="addBtn" class="btn">+ Yangi odat</button>
+<button id="themeBtn" class="ic" aria-label="Tema">🌓</button></div></header>
+<div class="layout">
+<nav class="nav"><a href="#today" data-r="today">📅 <span>Bugun</span></a><a href="#cal" data-r="cal">🗓 <span>Kalendar</span></a><a href="#stats" data-r="stats">📊 <span>Statistika</span></a><a href="#set" data-r="set">⚙️ <span>Sozlamalar</span></a></nav>
+<main id="main"></main></div>
+<dialog id="dlg"><form method="dialog" id="f">
+<h2>Yangi odat</h2>
+<label>Nomi<input id="fn" required maxlength="60"></label>
+<label>Emoji<input id="fe" maxlength="3" value="💧"></label>
+<label>Turi<select id="ft"><option value="yesno">Ha/Yo‘q</option><option value="count">Son (masalan 8 stakan)</option><option value="duration">Davomiylik (daqiqa)</option></select></label>
+<label id="tg">Maqsad<input id="fg" type="number" min="1" value="1"></label>
+<label>Takrorlanish<select id="fs"><option value="daily">Har kuni</option><option value="wd">Dush–Juma</option><option value="we">Shanba–Yakshanba</option></select></label>
+<div class="row"><button type="button" id="cx" class="ghost">Bekor</button><button class="btn">Saqlash</button></div>
+</form></dialog>
+<div id="toast"></div></div><script>
+(()=>{const $=s=>document.querySelector(s),K='ht.v1';
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>iso(new Date());
+let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
+S=S||{habits:[],logs:{},theme:'auto'};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){toast('Saqlab bo‘lmadi')}};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.className='s';setTimeout(()=>t.className='',1800)};
+const due=(h,d)=>{const w=d.getDay();return h.s==='daily'||(h.s==='wd'&&w>0&&w<6)||(h.s==='we'&&(w===0||w===6))};
+const val=(h,k)=>(S.logs[k]||{})[h.id]||0;
+const ok=(h,k)=>val(h,k)>=(h.t==='yesno'?1:h.g);
+const set=(h,k,v)=>{(S.logs[k]=S.logs[k]||{})[h.id]=Math.max(0,v);save()};
+function streak(h){let n=0,d=new Date();if(!ok(h,iso(d)))d.setDate(d.getDate()-1);
+for(let i=0;i<1000;i++){if(!due(h,d)){d.setDate(d.getDate()-1);continue}if(!ok(h,iso(d)))break;n++;d.setDate(d.getDate()-1)}return n}
+function best(h){let b=0,c=0;Object.keys(S.logs).sort().forEach(k=>{if(ok(h,k)){c++;b=Math.max(b,c)}else if(due(h,new Date(k+'T12:00')))c=0});return b}
+const unit=h=>h.t==='duration'?' daq':'';
+function today_(){const k=today(),L=S.habits.filter(h=>!h.x&&due(h,new Date()));
+const dn=L.filter(h=>ok(h,k)).length;
+let o=`<div class="card"><b>${dn}/${L.length}</b> bajarildi<div class="bar"><i style="width:${L.length?dn/L.length*100:0}%"></i></div></div>`;
+if(!S.habits.length)o+='<div class="card">Hali odat yo‘q. “+ Yangi odat” tugmasini bosing.</div>';
+L.forEach(h=>{const v=val(h,k);o+=`<div class="card"><div class="h"><span class="e">${h.e}</span><div class="n">${esc(h.n)}<br><small>🔥 ${streak(h)} kun${h.t!=='yesno'?` • ${v}/${h.g}${unit(h)}`:''}</small></div>`+
+(h.t==='yesno'?`<button class="chk ${ok(h,k)?'done':''}" data-a="tg" data-id="${h.id}">✓</button>`:
+`<div class="step"><button data-a="m" data-id="${h.id}">−</button><button data-a="p" data-id="${h.id}">+</button></div>`)+
+`</div>${h.t!=='yesno'?`<div class="bar"><i style="width:${Math.min(100,v/h.g*100)}%"></i></div>`:''}</div>`});return o}
+const esc=s=>s.replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function cal(){const n=new Date(),y=n.getFullYear(),m=n.getMonth(),f=(new Date(y,m,1).getDay()+6)%7,dim=new Date(y,m+1,0).getDate();
+let g='';['D','S','C','P','J','S','Y'].forEach(x=>g+=`<div style="background:none">${x}</div>`);
+for(let i=0;i<f;i++)g+='<div style="background:none"></div>';
+for(let d=1;d<=dim;d++){const k=iso(new Date(y,m,d)),L=S.habits.filter(h=>!h.x&&due(h,new Date(y,m,d)));
+const r=L.length?L.filter(h=>ok(h,k)).length/L.length:0;g+=`<div class="${r===0?'':r<.5?'l1':r<1?'l2':'l3'}">${d}</div>`}
+return `<div class="card"><b>${n.toLocaleDateString('uz',{month:'long',year:'numeric'})}</b><br><br><div class="grid">${g}</div></div>`}
+function stats(){const A=S.habits.filter(h=>!h.x);let d30=0,t30=0;
+for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);A.forEach(h=>{if(due(h,d)){t30++;if(ok(h,iso(d)))d30++}})}
+let o=`<div class="kp"><div class="card"><b>${t30?Math.round(d30/t30*100):0}%</b>30 kun</div><div class="card"><b>${A.length}</b>Odatlar</div><div class="card"><b>${Math.max(0,...A.map(streak))}</b>Eng uzun joriy streak</div></div>`;
+A.forEach(h=>o+=`<div class="card h"><span class="e">${h.e}</span><div class="n">${esc(h.n)}<br><small>Joriy 🔥${streak(h)} • Rekord ${best(h)}</small></div><button class="ghost" data-a="del" data-id="${h.id}">O‘chirish</button></div>`);return o}
+function set_(){return `<div class="card"><b>Zaxira</b><div class="row" style="justify-content:flex-start"><button class="btn" data-a="exp">JSON eksport</button><label class="ghost" style="margin:0;cursor:pointer">Import<input type="file" id="imp" accept="application/json" hidden></label></div></div>
+<div class="card"><b>Xavfli zona</b><div class="row" style="justify-content:flex-start"><button class="ghost" data-a="reset">Hammasini o‘chirish</button></div></div>
+<div class="card"><small>Barcha ma’lumot faqat shu qurilmada saqlanadi. Offline ishlaydi.</small></div>`}
+const R={today:today_,cal,stats,set:set_};
+function render(){const r=(location.hash||'#today').slice(1);const f=R[r]||today_;
+document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===r));$('#main').innerHTML=f();
+const i=$('#imp');if(i)i.onchange=e=>{const fl=e.target.files[0];if(!fl)return;fl.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.habits))throw 0;if(confirm('Hozirgi ma’lumot almashtiriladi. Davom etasizmi?')){S=d;save();render();toast('Import qilindi')}}catch(x){toast('Fayl noto‘g‘ri')}})}
+$('#main').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const h=S.habits.find(x=>x.id===b.dataset.id),k=today(),a=b.dataset.a;
+if(a==='tg')set(h,k,ok(h,k)?0:1);
+else if(a==='p')set(h,k,val(h,k)+(h.t==='duration'?5:1));
+else if(a==='m')set(h,k,val(h,k)-(h.t==='duration'?5:1));
+else if(a==='del'){if(confirm('O‘chirilsinmi?')){S.habits=S.habits.filter(x=>x!==h);save()}}
+else if(a==='exp'){const u=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'})),l=document.createElement('a');l.href=u;l.download='habits-'+today()+'.json';l.click();URL.revokeObjectURL(u);return}
+else if(a==='reset'){if(confirm('Hammasi o‘chadi!')){S={habits:[],logs:{},theme:S.theme};save()}}
+render()});
+const dlg=$('#dlg');$('#addBtn').onclick=()=>{$('#f').reset();tg();dlg.showModal()};$('#cx').onclick=()=>dlg.close();
+const tg=()=>{$('#tg').style.display=$('#ft').value==='yesno'?'none':'block'};$('#ft').onchange=tg;
+$('#f').onsubmit=()=>{const t=$('#ft').value;S.habits.push({id:Date.now().toString(36),n:$('#fn').value.trim(),e:$('#fe').value||'⭐',t,g:t==='yesno'?1:+$('#fg').value||1,s:$('#fs').value});save();location.hash='#today';render()};
+const th=()=>{if(S.theme!=='auto')document.documentElement.dataset.theme=S.theme};th();
+$('#themeBtn').onclick=()=>{const d=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');S.theme=d==='dark'?'light':'dark';document.documentElement.dataset.theme=S.theme;save()};
+addEventListener('hashchange',render);render();
+})();
+</script></body></html>
