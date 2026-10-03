@@ -1,255 +1,179 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#7c3aed" />
-    <meta name="description" content="HabitFlow — offline-first habit tracker" />
-    <title>HabitFlow</title>
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/styles.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Main navigation">
-        <div class="brand-block">
-          <div class="logo-badge">H</div>
-          <div>
-            <div class="brand-name">HabitFlow</div>
-            <div class="brand-subtitle">Daily growth</div>
-          </div>
-        </div>
+export const DEFAULT_SETTINGS = {
+  theme: 'dark',
+  language: 'en',
+  accent: '#7c3aed',
+  fontSize: 15,
+  pinHash: '',
+  seeded: false
+};
 
-        <nav class="nav" aria-label="Primary navigation">
-          <button class="nav-item active" data-view="today" type="button">Today</button>
-          <button class="nav-item" data-view="habits" type="button">Habits</button>
-          <button class="nav-item" data-view="stats" type="button">Stats</button>
-          <button class="nav-item" data-view="journal" type="button">Journal</button>
-          <button class="nav-item" data-view="settings" type="button">Settings</button>
-        </nav>
+export function uid() {
+  return globalThis.crypto?.randomUUID?.() || 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
 
-        <button id="addHabitBtn" class="primary-btn wide" type="button">+ Add habit</button>
+export function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
-        <div class="sidebar-card">
-          <div class="label-row">
-            <span>Level</span>
-            <strong id="levelValueSidebar">1</strong>
-          </div>
-          <div class="progress-track">
-            <div id="xpProgressBar" class="progress-fill" style="width: 0%"></div>
-          </div>
-          <div class="tiny-muted" id="xpProgressText">0 / 100 XP</div>
-        </div>
-      </aside>
+export function getTodayKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-      <main class="main-panel">
-        <header class="topbar">
-          <div>
-            <div class="eyebrow" id="currentDateLabel">Today</div>
-            <h1 id="pageTitle">Today</h1>
-          </div>
-          <div class="header-actions">
-            <button class="ghost-btn" id="themeToggle" type="button">Theme</button>
-            <button class="ghost-btn" id="quoteRefreshBtn" type="button">Quote</button>
-            <button class="ghost-btn" id="backupBtn" type="button">Backup</button>
-          </div>
-        </header>
+export function addDays(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return getTodayKey(date);
+}
 
-        <section id="view-today" class="view active" aria-label="Today screen">
-          <div class="hero-grid">
-            <div class="card score-card">
-              <div class="card-label">Daily score</div>
-              <div class="score-ring" id="dailyScoreRing" aria-label="Daily score ring">
-                <div class="score-ring-inner">
-                  <span id="dailyScoreValue">0%</span>
-                </div>
-              </div>
-            </div>
+export const habitTemplates = [
+  { name: 'Workout', type: 'yesno', icon: '🏋️', color: '#22c55e', category: 'Sport', schedule: { kind: 'weekdays', weekdays: [1, 3, 5] }, notes: 'Stay active and strong.' },
+  { name: 'Reading', type: 'counter', icon: '📚', color: '#f59e0b', category: 'Study', schedule: { kind: 'daily' }, targetValue: 20, notes: 'Read pages or chapters.' },
+  { name: 'Hydration', type: 'numeric', icon: '💧', color: '#38bdf8', category: 'Health', schedule: { kind: 'daily' }, targetValue: 2, notes: 'Water intake in liters.' },
+  { name: 'Sleep', type: 'numeric', icon: '😴', color: '#a78bfa', category: 'Health', schedule: { kind: 'daily' }, targetValue: 8, notes: 'Sleep duration in hours.' },
+  { name: 'Budget', type: 'numeric', icon: '💰', color: '#f97316', category: 'Finance', schedule: { kind: 'weekdays', weekdays: [1, 3, 5] }, targetValue: 200, notes: 'Track spending.' }
+];
 
-            <div class="card quote-card">
-              <div class="card-label">Motivation</div>
-              <blockquote id="quoteText">“Small steps create lasting change.”</blockquote>
-              <div class="tiny-muted" id="quoteAuthor">— HabitFlow</div>
-            </div>
-          </div>
+const TYPES = ['yesno', 'counter', 'numeric', 'timer'];
+const KINDS = ['daily', 'weekdays', 'everyN'];
 
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Quick actions</h3>
-            </div>
-            <div id="todayQuickActions" class="quick-actions"></div>
-          </div>
+export function normalizeHabit(raw = {}) {
+  const s = raw.schedule || {};
+  const target = Number(raw.targetValue);
+  return {
+    id: String(raw.id || uid()).replace(/[^\w-]/g, ''),
+    name: String(raw.name || 'New habit').slice(0, 40),
+    type: TYPES.includes(raw.type) ? raw.type : 'yesno',
+    icon: String(raw.icon || '✨').slice(0, 4),
+    color: /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : '#7c3aed',
+    category: String(raw.category || 'General').slice(0, 30),
+    tags: Array.isArray(raw.tags) ? raw.tags.map(String).slice(0, 10) : [],
+    notes: String(raw.notes || '').slice(0, 500),
+    schedule: KINDS.includes(s.kind) ? { ...s } : { kind: 'daily' },
+    targetValue: target > 0 ? target : 1,
+    startDate: /^\d{4}-\d{2}-\d{2}$/.test(raw.startDate) ? raw.startDate : getTodayKey(),
+    pinned: Boolean(raw.pinned),
+    archived: Boolean(raw.archived),
+    paused: Boolean(raw.paused),
+    reminders: Array.isArray(raw.reminders) ? raw.reminders : [],
+    createdAt: raw.createdAt || new Date().toISOString()
+  };
+}
 
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Today’s habits</h3>
-            </div>
-            <div id="habitListToday" class="habit-list"></div>
-          </div>
-        </section>
+export function createDefaultHabit() {
+  return normalizeHabit({
+    name: 'New habit',
+    type: 'yesno',
+    icon: '✨',
+    color: '#7c3aed',
+    category: 'General',
+    tags: ['general'],
+    notes: '',
+    schedule: { kind: 'daily' },
+    targetValue: 1,
+    startDate: getTodayKey(),
+    pinned: false,
+    archived: false,
+    paused: false,
+    reminders: []
+  });
+}
 
-        <section id="view-habits" class="view" aria-label="Habits screen">
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Habits</h3>
-              <button id="templateLibraryBtn" class="ghost-btn compact" type="button">Templates</button>
-            </div>
-            <div id="habitListView" class="habit-list"></div>
-          </div>
-        </section>
+export function createHabitFromTemplate(template) {
+  return normalizeHabit({
+    name: template.name,
+    type: template.type,
+    icon: template.icon,
+    color: template.color,
+    category: template.category,
+    tags: [template.category.toLowerCase()],
+    notes: template.notes,
+    schedule: template.schedule,
+    targetValue: template.targetValue || 1,
+    startDate: getTodayKey(),
+    pinned: false,
+    archived: false,
+    paused: false,
+    reminders: [],
+    createdAt: new Date().toISOString()
+  });
+}
 
-        <section id="view-stats" class="view" aria-label="Stats screen">
-          <div class="stats-grid">
-            <div class="card mini-stat">
-              <div class="card-label">Current streak</div>
-              <div id="currentStreakValue" class="stat-value">0</div>
-            </div>
-            <div class="card mini-stat">
-              <div class="card-label">Best streak</div>
-              <div id="bestStreakValue" class="stat-value">0</div>
-            </div>
-            <div class="card mini-stat">
-              <div class="card-label">Completion</div>
-              <div id="completionRateValue" class="stat-value">0%</div>
-            </div>
-            <div class="card mini-stat">
-              <div class="card-label">XP</div>
-              <div id="xpValue" class="stat-value">0</div>
-            </div>
-          </div>
+export const state = {
+  settings: { ...DEFAULT_SETTINGS },
+  habits: [],
+  journal: {},
+  logs: {},
+  currentView: 'today',
+  selectedDate: getTodayKey(),
+  appVersion: '1.0.0'
+};
 
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Trend</h3>
-            </div>
-            <div id="trendChart" class="chart-wrap"></div>
-          </div>
+export function getHabitLog(habitId, dateKey) {
+  return state.logs[habitId]?.[dateKey] || null;
+}
 
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Heatmap</h3>
-            </div>
-            <div id="heatmapContainer" class="heatmap-container"></div>
-          </div>
+export function setHabitLog(habitId, dateKey, logEntry) {
+  if (!state.logs[habitId]) state.logs[habitId] = {};
+  state.logs[habitId][dateKey] = { ...logEntry, habitId, dateKey };
+}
 
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Achievements</h3>
-            </div>
-            <div id="achievementList" class="achievement-list"></div>
-          </div>
-        </section>
+export function getHabitStatus(habit, dateKey = getTodayKey()) {
+  const log = getHabitLog(habit.id, dateKey);
+  if (!log) return { completed: false, value: 0, percent: 0 };
 
-        <section id="view-journal" class="view" aria-label="Journal screen">
-          <div class="card panel-card">
-            <div class="card-header-row">
-              <h3>Daily journal</h3>
-            </div>
-            <div class="journal-form">
-              <label>
-                <span>Day</span>
-                <input id="journalDateInput" type="date" />
-              </label>
-              <label>
-                <span>Mood</span>
-                <select id="journalMoodSelect">
-                  <option value="happy">Happy</option>
-                  <option value="calm">Calm</option>
-                  <option value="tired">Tired</option>
-                  <option value="stressed">Stressed</option>
-                  <option value="sad">Low</option>
-                </select>
-              </label>
-              <label>
-                <span>Notes</span>
-                <textarea id="journalNoteInput" rows="5" placeholder="How did your day go?"></textarea>
-              </label>
-              <button id="saveJournalBtn" class="primary-btn" type="button">Save entry</button>
-            </div>
-          </div>
-        </section>
+  if (habit.type === 'yesno') {
+    return { completed: Boolean(log.completed), value: Number(log.value || 0), percent: log.completed ? 100 : 0 };
+  }
 
-        <section id="view-settings" class="view" aria-label="Settings screen">
-          <div class="settings-grid">
-            <div class="card panel-card">
-              <div class="card-header-row">
-                <h3>Preferences</h3>
-              </div>
-              <div class="setting-row">
-                <label for="themeSelect">Theme</label>
-                <select id="themeSelect">
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="auto">Auto</option>
-                </select>
-              </div>
-              <div class="setting-row">
-                <label for="languageSelect">Language</label>
-                <select id="languageSelect">
-                  <option value="en">English</option>
-                  <option value="ru">Русский</option>
-                  <option value="uz">O‘zbek</option>
-                </select>
-              </div>
-              <div class="setting-row">
-                <label for="accentPicker">Accent</label>
-                <input id="accentPicker" type="color" value="#7c3aed" />
-              </div>
-              <div class="setting-row">
-                <label for="fontSizeRange">Font size</label>
-                <input id="fontSizeRange" type="range" min="14" max="18" value="15" />
-              </div>
-            </div>
+  if (habit.type === 'counter' || habit.type === 'numeric' || habit.type === 'timer') {
+    const target = Number(habit.targetValue || 1);
+    const value = Number(log.value || 0);
+    return { completed: value >= target, value, percent: Math.min(100, Math.round((value / target) * 100)) };
+  }
 
-            <div class="card panel-card">
-              <div class="card-header-row">
-                <h3>Security</h3>
-              </div>
-              <div class="setting-row inline-action">
-                <label for="pinInput">PIN lock</label>
-                <input id="pinInput" type="password" maxlength="6" inputmode="numeric" placeholder="Optional 4-6 digit PIN" />
-              </div>
-              <button id="lockBtn" class="ghost-btn" type="button">Enable PIN lock</button>
-            </div>
+  return { completed: Boolean(log.completed), value: Number(log.value || 0), percent: 0 };
+}
 
-            <div class="card panel-card">
-              <div class="card-header-row">
-                <h3>Backup & sync</h3>
-              </div>
-              <button id="exportJsonBtn" class="ghost-btn wide" type="button">Export JSON</button>
-              <label class="file-input-wrap">
-                <span>Import JSON</span>
-                <input id="importJsonInput" type="file" accept="application/json" />
-              </label>
-              <button id="encryptBackupBtn" class="ghost-btn wide" type="button">Encrypt backup</button>
-              <button id="partnerModeBtn" class="ghost-btn wide" type="button">Partner compare</button>
-              <button id="shareCardBtn" class="ghost-btn wide" type="button">Share progress card</button>
-            </div>
+export function isScheduled(habit, dateKey) {
+  if (habit.archived || habit.paused || dateKey < habit.startDate) return false;
+  const s = habit.schedule || { kind: 'daily' };
+  const d = new Date(`${dateKey}T00:00:00`);
+  if (s.kind === 'weekdays') return (s.weekdays || []).includes(d.getDay());
+  if (s.kind === 'everyN') {
+    const diff = Math.round((d - new Date(`${habit.startDate}T00:00:00`)) / 864e5);
+    return diff % Math.max(1, s.every || 1) === 0;
+  }
+  return true;
+}
 
-            <div class="card panel-card danger-card">
-              <div class="card-header-row">
-                <h3>Danger zone</h3>
-              </div>
-              <button id="resetDataBtn" class="danger-btn wide" type="button">Reset all data</button>
-              <div id="storageInfo" class="tiny-muted">Storage: computing…</div>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
+export function getStreaks(habit) {
+  const today = getTodayKey();
+  let run = 0, best = 0;
+  for (let k = habit.startDate; k <= today; k = addDays(k, 1)) {
+    if (!isScheduled(habit, k)) continue;
+    if (getHabitStatus(habit, k).completed) {
+      run += 1;
+      best = Math.max(best, run);
+    } else if (k !== today) {
+      run = 0;
+    }
+  }
+  return { current: run, best };
+}
 
-    <nav class="mobile-nav" aria-label="Bottom navigation">
-      <button class="mobile-nav-item active" data-view="today" type="button">Today</button>
-      <button class="mobile-nav-item" data-view="habits" type="button">Habits</button>
-      <button class="mobile-nav-item" data-view="stats" type="button">Stats</button>
-      <button class="mobile-nav-item" data-view="journal" type="button">Journal</button>
-      <button class="mobile-nav-item" data-view="settings" type="button">Settings</button>
-    </nav>
+export function flattenLogs() {
+  const result = [];
+  Object.entries(state.logs).forEach(([habitId, dates]) => {
+    Object.entries(dates).forEach(([dateKey, log]) => {
+      result.push({ id: `${habitId}-${dateKey}`, habitId, dateKey, ...log });
+    });
+  });
+  return result;
+}
 
-    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-    <div id="modalRoot" class="modal-root" aria-live="polite"></div>
-
-    <script type="module" src="./js/app.js"></script>
-  </body>
-</html>
+export function getLevelFromXP(xp) {
+  return 1 + Math.floor(xp / 100);
+}

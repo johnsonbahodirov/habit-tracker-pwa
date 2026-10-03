@@ -1,57 +1,257 @@
-const CACHE_NAME = 'habitflow-v1';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './css/styles.css',
-  './js/app.js',
-  './js/db.js',
-  './js/state.js',
-  './js/ui.js',
-  './js/stats.js',
-  './js/i18n.js',
-  './js/notifications.js',
-  './js/backup.js',
-  './icons/icon.svg'
-];
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="description" content="HabitFlow — offline-first habit tracker" />
+    <title>HabitFlow</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand-block">
+          <div class="logo-badge">H</div>
+          <div>
+            <div class="brand-name">HabitFlow</div>
+            <div class="brand-subtitle">Daily growth</div>
+          </div>
+        </div>
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-  );
-});
+        <nav class="nav" aria-label="Primary navigation">
+          <button class="nav-item active" data-view="today" type="button" data-i18n="today">Today</button>
+          <button class="nav-item" data-view="habits" type="button" data-i18n="habits">Habits</button>
+          <button class="nav-item" data-view="stats" type="button" data-i18n="stats">Stats</button>
+          <button class="nav-item" data-view="journal" type="button" data-i18n="journal">Journal</button>
+          <button class="nav-item" data-view="settings" type="button" data-i18n="settings">Settings</button>
+        </nav>
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))).then(() => self.clients.claim())
-  );
-});
+        <button id="addHabitBtn" class="primary-btn wide" type="button" data-i18n="addHabit">+ Add habit</button>
 
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) {
-    return;
-  }
+        <div class="sidebar-card">
+          <div class="label-row">
+            <span>Level</span>
+            <strong id="levelValueSidebar">1</strong>
+          </div>
+          <div class="progress-track">
+            <div id="xpProgressBar" class="progress-fill" style="width: 0%"></div>
+          </div>
+          <div class="tiny-muted" id="xpProgressText">0 / 100 XP</div>
+        </div>
+      </aside>
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
-          return response;
-        })
-        .catch(() => cached || Response.error());
-    })
-  );
-});
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="header-side">
+            <div class="eyebrow" id="currentDateLabel">Today</div>
+            <h1 id="pageTitle">Today</h1>
+          </div>
+          <div class="header-actions">
+            <button class="ghost-btn" id="prevDayBtn" type="button" aria-label="Previous day">‹</button>
+            <button class="ghost-btn" id="nextDayBtn" type="button" aria-label="Next day">›</button>
+            <button class="ghost-btn" id="themeToggle" type="button" data-i18n="theme">Theme</button>
+            <button class="ghost-btn" id="quoteRefreshBtn" type="button" data-i18n="quote">Quote</button>
+            <button class="ghost-btn" id="backupBtn" type="button" data-i18n="backup">Backup</button>
+          </div>
+        </header>
 
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
+        <section id="view-today" class="view active" aria-label="Today screen">
+          <div class="hero-grid">
+            <div class="card score-card">
+              <div class="card-label">Daily score</div>
+              <div class="score-ring" id="dailyScoreRing" aria-label="Daily score ring">
+                <div class="score-ring-inner">
+                  <span id="dailyScoreValue">0%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card quote-card">
+              <div class="card-label">Motivation</div>
+              <blockquote id="quoteText">“Small steps create lasting change.”</blockquote>
+              <div class="tiny-muted" id="quoteAuthor">— HabitFlow</div>
+            </div>
+          </div>
+
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Quick actions</h3>
+            </div>
+            <div id="todayQuickActions" class="quick-actions"></div>
+          </div>
+
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Today’s habits</h3>
+            </div>
+            <div id="habitListToday" class="habit-list"></div>
+          </div>
+        </section>
+
+        <section id="view-habits" class="view" aria-label="Habits screen">
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Habits</h3>
+              <button id="templateLibraryBtn" class="ghost-btn compact" type="button">Templates</button>
+            </div>
+            <div id="habitListView" class="habit-list"></div>
+          </div>
+        </section>
+
+        <section id="view-stats" class="view" aria-label="Stats screen">
+          <div class="stats-grid">
+            <div class="card mini-stat">
+              <div class="card-label">Current streak</div>
+              <div id="currentStreakValue" class="stat-value">0</div>
+            </div>
+            <div class="card mini-stat">
+              <div class="card-label">Best streak</div>
+              <div id="bestStreakValue" class="stat-value">0</div>
+            </div>
+            <div class="card mini-stat">
+              <div class="card-label">Completion</div>
+              <div id="completionRateValue" class="stat-value">0%</div>
+            </div>
+            <div class="card mini-stat">
+              <div class="card-label">XP</div>
+              <div id="xpValue" class="stat-value">0</div>
+            </div>
+          </div>
+
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Trend</h3>
+            </div>
+            <div id="trendChart" class="chart-wrap"></div>
+          </div>
+
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Heatmap</h3>
+            </div>
+            <div id="heatmapContainer" class="heatmap-container"></div>
+          </div>
+
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Achievements</h3>
+            </div>
+            <div id="achievementList" class="achievement-list"></div>
+          </div>
+        </section>
+
+        <section id="view-journal" class="view" aria-label="Journal screen">
+          <div class="card panel-card">
+            <div class="card-header-row">
+              <h3>Daily journal</h3>
+            </div>
+            <div class="journal-form">
+              <label>
+                <span>Day</span>
+                <input id="journalDateInput" type="date" />
+              </label>
+              <label>
+                <span>Mood</span>
+                <select id="journalMoodSelect">
+                  <option value="happy">Happy</option>
+                  <option value="calm">Calm</option>
+                  <option value="tired">Tired</option>
+                  <option value="stressed">Stressed</option>
+                  <option value="sad">Low</option>
+                </select>
+              </label>
+              <label>
+                <span>Notes</span>
+                <textarea id="journalNoteInput" rows="5" placeholder="How did your day go?"></textarea>
+              </label>
+              <button id="saveJournalBtn" class="primary-btn" type="button">Save entry</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-settings" class="view" aria-label="Settings screen">
+          <div class="settings-grid">
+            <div class="card panel-card">
+              <div class="card-header-row">
+                <h3>Preferences</h3>
+              </div>
+              <div class="setting-row">
+                <label for="themeSelect">Theme</label>
+                <select id="themeSelect">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Auto</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <label for="languageSelect">Language</label>
+                <select id="languageSelect">
+                  <option value="en">English</option>
+                  <option value="ru">Русский</option>
+                  <option value="uz">O‘zbek</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <label for="accentPicker">Accent</label>
+                <input id="accentPicker" type="color" value="#7c3aed" />
+              </div>
+              <div class="setting-row">
+                <label for="fontSizeRange">Font size</label>
+                <input id="fontSizeRange" type="range" min="14" max="18" value="15" />
+              </div>
+            </div>
+
+            <div class="card panel-card">
+              <div class="card-header-row">
+                <h3>Security</h3>
+              </div>
+              <div class="setting-row inline-action">
+                <label for="pinInput">PIN lock</label>
+                <input id="pinInput" type="password" maxlength="6" inputmode="numeric" placeholder="Optional 4-6 digit PIN" autocomplete="off" />
+              </div>
+              <button id="lockBtn" class="ghost-btn" type="button">Enable PIN lock</button>
+            </div>
+
+            <div class="card panel-card">
+              <div class="card-header-row">
+                <h3>Backup & sync</h3>
+              </div>
+              <button id="exportJsonBtn" class="ghost-btn wide" type="button">Export JSON</button>
+              <label class="file-input-wrap">
+                <span>Import JSON</span>
+                <input id="importJsonInput" type="file" accept="application/json" />
+              </label>
+              <button id="encryptBackupBtn" class="ghost-btn wide" type="button">Encrypt backup</button>
+              <button id="shareCardBtn" class="ghost-btn wide" type="button">Share progress card</button>
+            </div>
+
+            <div class="card panel-card danger-card">
+              <div class="card-header-row">
+                <h3>Danger zone</h3>
+              </div>
+              <button id="resetDataBtn" class="danger-btn wide" type="button">Reset all data</button>
+              <div id="storageInfo" class="tiny-muted">Storage: computing…</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Bottom navigation">
+      <button class="mobile-nav-item active" data-view="today" type="button">Today</button>
+      <button class="mobile-nav-item" data-view="habits" type="button">Habits</button>
+      <button class="mobile-nav-item" data-view="stats" type="button">Stats</button>
+      <button class="mobile-nav-item" data-view="journal" type="button">Journal</button>
+      <button class="mobile-nav-item" data-view="settings" type="button">Settings</button>
+    </nav>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div id="modalRoot" class="modal-root" aria-live="polite"></div>
+    <noscript>HabitFlow requires JavaScript.</noscript>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

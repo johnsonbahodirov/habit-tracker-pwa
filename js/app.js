@@ -1,83 +1,83 @@
-import { state, createHabitFromTemplate, createDefaultHabit, getHabitStatus, getTodayKey, normalizeHabit, safeText } from './state.js';
-import { t } from './i18n.js';
-import { computeDailyScore, computeHeatmap, computeAchievementList, renderTrendChart, computeXPFromState } from './stats.js';
-import { showToast } from './notifications.js';
+import { state, habitTemplates, createDefaultHabit, getHabitStatus, isScheduled, getStreaks, getLevelFromXP, escapeHtml } from './state.js';
+import { t, applyI18n } from './i18n.js';
+import { computeDailyScore, computeHeatmap, computeAchievementList, renderTrendChart, computeXP, computeCompletionRate } from './stats.js';
 
 export function renderApp() {
-  const title = document.getElementById('pageTitle');
-  const dateLabel = document.getElementById('currentDateLabel');
-  const today = new Date();
-
-  title.textContent = t('today', state.settings.language || 'en');
-  dateLabel.textContent = today.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
+  const lang = state.settings.language || 'en';
+  document.getElementById('pageTitle').textContent = t(state.currentView, lang);
+  document.getElementById('currentDateLabel').textContent = new Date(`${state.selectedDate}T00:00:00`).toLocaleDateString(lang, {
+    weekday: 'short', month: 'short', day: 'numeric'
   });
 
-  const theme = state.settings.theme === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-    : state.settings.theme;
-
+  const theme = state.settings.theme === 'auto' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : state.settings.theme;
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.fontSize = String(state.settings.fontSize || 15);
   document.documentElement.style.setProperty('--accent', state.settings.accent || '#7c3aed');
 
-  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach((button) => {
-    button.classList.toggle('active', button.dataset.view === state.currentView);
+  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach((b) => {
+    b.classList.toggle('active', b.dataset.view === state.currentView);
+  });
+  document.querySelectorAll('.view').forEach((v) => {
+    v.classList.toggle('active', v.id === `view-${state.currentView}`);
   });
 
-  document.querySelectorAll('.view').forEach((view) => {
-    view.classList.toggle('active', `view-${state.currentView}` === view.id);
-  });
-
-  renderTodayPanel();
-  renderHabitsPanel();
-  renderStatsPanel();
-  renderJournalPanel();
-  renderSettingsPanel();
+  const renderers = {
+    today: renderTodayPanel,
+    habits: renderHabitsPanel,
+    stats: renderStatsPanel,
+    journal: renderJournalPanel,
+    settings: renderSettingsPanel
+  };
+  renderers[state.currentView]?.();
   renderSidebarXP();
+  applyI18n(lang);
+}
+
+function habitControl(habit, status) {
+  const id = escapeHtml(habit.id);
+  if (habit.type === 'yesno') {
+    return `<button class="circle-toggle ${status.completed ? 'done' : ''}" type="button" data-action="toggle-habit" data-habit-id="${id}" aria-pressed="${status.completed}" aria-label="Toggle ${escapeHtml(habit.name)}"></button>`;
+  }
+  if (habit.type === 'counter') {
+    return `<button class="ghost-btn compact" type="button" data-action="dec" data-habit-id="${id}" aria-label="Minus">−</button>
+      <span>${status.value}/${habit.targetValue}</span>
+      <button class="ghost-btn compact" type="button" data-action="inc" data-habit-id="${id}" aria-label="Plus">+</button>`;
+  }
+  return `<input class="value-input" type="number" min="0" step="any" value="${status.value}" data-set-value data-habit-id="${id}" aria-label="${escapeHtml(habit.name)}"> / ${habit.targetValue}`;
 }
 
 export function renderTodayPanel() {
-  const score = computeDailyScore(state.habits || []);
-  const ring = document.getElementById('dailyScoreRing');
-  ring.style.setProperty('--score', score);
+  const dateKey = state.selectedDate;
+  const score = computeDailyScore(dateKey);
+  document.getElementById('dailyScoreRing').style.setProperty('--score', score);
   document.getElementById('dailyScoreValue').textContent = `${score}%`;
 
-  const actionsEl = document.getElementById('todayQuickActions');
-  actionsEl.innerHTML = [
-    { label: 'Log today', action: 'log-day' },
+  document.getElementById('todayQuickActions').innerHTML = [
     { label: 'Journal', action: 'open-journal' },
-    { label: 'Template', action: 'template-library' },
+    { label: 'Templates', action: 'template-library' },
     { label: 'Export', action: 'export-json' }
-  ].map((item) => `
-    <button class="quick-action-btn" type="button" data-action="${item.action}">${item.label}</button>
-  `).join('');
+  ].map((item) => `<button class="quick-action-btn" type="button" data-action="${item.action}">${item.label}</button>`).join('');
 
   const listEl = document.getElementById('habitListToday');
-  if (!state.habits.length) {
-    listEl.innerHTML = '<div class="card"><p>No habits yet. Add one to get started.</p></div>';
+  const visible = state.habits.filter((h) => isScheduled(h, dateKey));
+  if (!visible.length) {
+    listEl.innerHTML = `<div class="card"><p>${state.habits.length ? 'Nothing scheduled for this day.' : 'No habits yet. Add one to get started.'}</p></div>`;
     return;
   }
 
-  const visibleHabits = state.habits.filter((habit) => !habit.archived);
-  listEl.innerHTML = visibleHabits.map((habit) => {
-    const status = getHabitStatus(habit, getTodayKey());
-    const doneClass = status.completed ? 'done' : '';
+  listEl.innerHTML = visible.map((habit) => {
+    const status = getHabitStatus(habit, dateKey);
     return `
-      <article class="habit-card" data-habit-id="${habit.id}">
-        <div class="habit-icon" style="background:${habit.color}">${habit.icon}</div>
+      <article class="habit-card">
+        <div class="habit-icon" style="background:${escapeHtml(habit.color)}">${escapeHtml(habit.icon)}</div>
         <div class="habit-content">
           <div class="habit-top">
-            <div class="habit-name">${safeText(habit.name)}</div>
+            <div class="habit-name">${escapeHtml(habit.name)}</div>
             <div class="completion-badge">${status.percent}%</div>
           </div>
-          <div class="habit-meta">${safeText(habit.category)} • ${safeText(habit.type)}</div>
+          <div class="habit-meta">${escapeHtml(habit.category)} • 🔥 ${getStreaks(habit).current}</div>
         </div>
-        <div class="habit-actions">
-          <button class="circle-toggle ${doneClass}" type="button" data-action="toggle-habit" data-habit-id="${habit.id}" aria-label="Toggle ${safeText(habit.name)}"></button>
-        </div>
+        <div class="habit-actions">${habitControl(habit, status)}</div>
       </article>
     `;
   }).join('');
@@ -91,44 +91,43 @@ export function renderHabitsPanel() {
   }
 
   listEl.innerHTML = state.habits.map((habit) => `
-    <article class="habit-card" data-habit-id="${habit.id}">
-      <div class="habit-icon" style="background:${habit.color}">${habit.icon}</div>
+    <article class="habit-card" data-habit-id="${escapeHtml(habit.id)}">
+      <div class="habit-icon" style="background:${escapeHtml(habit.color)}">${escapeHtml(habit.icon)}</div>
       <div class="habit-content">
         <div class="habit-top">
-          <div class="habit-name">${safeText(habit.name)}</div>
-          <div class="completion-badge">${habit.type}</div>
+          <div class="habit-name">${escapeHtml(habit.name)}</div>
+          <div class="completion-badge">${escapeHtml(habit.type)}</div>
         </div>
-        <div class="habit-meta">${safeText(habit.category)} • ${habit.schedule?.kind || 'daily'}</div>
+        <div class="habit-meta">${escapeHtml(habit.category)} • ${habit.schedule?.kind || 'daily'}</div>
       </div>
       <div class="habit-actions">
-        <button class="ghost-btn compact" type="button" data-action="edit-habit" data-habit-id="${habit.id}">Edit</button>
-        <button class="ghost-btn compact" type="button" data-action="delete-habit" data-habit-id="${habit.id}">Delete</button>
+        <button class="ghost-btn compact" type="button" data-action="edit-habit" data-habit-id="${escapeHtml(habit.id)}">Edit</button>
+        <button class="ghost-btn compact" type="button" data-action="delete-habit" data-habit-id="${escapeHtml(habit.id)}">Delete</button>
       </div>
     </article>
   `).join('');
 }
 
 export function renderStatsPanel() {
-  document.getElementById('currentStreakValue').textContent = '12';
-  document.getElementById('bestStreakValue').textContent = '28';
-  document.getElementById('completionRateValue').textContent = `${computeDailyScore(state.habits || [])}%`;
-  document.getElementById('xpValue').textContent = String(state.settings.xp || 0);
+  const streaks = state.habits.map(getStreaks);
+  const currentBest = Math.max(0, ...streaks.map((s) => s.current));
+  const bestBest = Math.max(0, ...streaks.map((s) => s.best));
+  document.getElementById('currentStreakValue').textContent = String(currentBest);
+  document.getElementById('bestStreakValue').textContent = String(bestBest);
+  document.getElementById('completionRateValue').textContent = `${computeCompletionRate(30)}%`;
+  document.getElementById('xpValue').textContent = String(computeXP());
 
   const heatmap = document.getElementById('heatmapContainer');
-  heatmap.innerHTML = computeHeatmap(state.habits || []).map((value) => `
-    <div class="heatmap-day level-${value}" title="Completion level ${value}"></div>
-  `).join('');
+  heatmap.innerHTML = computeHeatmap(28).map((d) => `<div class="heatmap-day level-${d.level}" title="${d.dateKey}"></div>`).join('');
 
   const achievements = document.getElementById('achievementList');
-  achievements.innerHTML = computeAchievementList().map((item) => `
-    <div class="achievement-badge ${item.unlocked ? '' : 'locked'}">${item.name}</div>
-  `).join('');
+  achievements.innerHTML = computeAchievementList().map((item) => `<div class="achievement-badge ${item.unlocked ? '' : 'locked'}">${escapeHtml(item.name)}</div>`).join('');
 
   renderTrendChart(document.getElementById('trendChart'));
 }
 
 export function renderJournalPanel() {
-  const today = getTodayKey();
+  const today = state.selectedDate;
   const entry = state.journal[today] || {};
   document.getElementById('journalDateInput').value = today;
   document.getElementById('journalMoodSelect').value = entry.mood || 'happy';
@@ -140,7 +139,7 @@ export function renderSettingsPanel() {
   document.getElementById('languageSelect').value = state.settings.language || 'en';
   document.getElementById('accentPicker').value = state.settings.accent || '#7c3aed';
   document.getElementById('fontSizeRange').value = String(state.settings.fontSize || 15);
-  document.getElementById('pinInput').value = state.settings.pin || '';
+  document.getElementById('pinInput').value = '';
 
   try {
     const storageInfo = document.getElementById('storageInfo');
@@ -158,12 +157,12 @@ export function renderSettingsPanel() {
 }
 
 export function renderSidebarXP() {
-  const xp = Number(state.settings.xp || 0);
-  const level = Math.max(1, Math.floor(xp / 100) + 1);
+  const xp = computeXP();
+  const level = getLevelFromXP(xp);
   const fill = document.getElementById('xpProgressBar');
   const text = document.getElementById('xpProgressText');
-  fill.style.width = `${Math.min(100, ((xp % 100) / 100) * 100)}%`;
-  text.textContent = `${xp} / ${level * 100} XP`;
+  fill.style.width = `${Math.min(100, xp % 100)}%`;
+  text.textContent = `${xp % 100} / 100 XP`;
   document.getElementById('levelValueSidebar').textContent = String(level);
 }
 
@@ -180,23 +179,15 @@ export function closeModal() {
 }
 
 export function renderTemplateLibrary() {
-  const templates = [
-    { name: 'Sport', icon: '🏃', color: '#22c55e', type: 'yesno' },
-    { name: 'Study', icon: '📖', color: '#f59e0b', type: 'counter' },
-    { name: 'Health', icon: '🩺', color: '#38bdf8', type: 'numeric' },
-    { name: 'Sleep', icon: '🌙', color: '#a78bfa', type: 'timer' },
-    { name: 'Finance', icon: '💼', color: '#fb7185', type: 'numeric' }
-  ];
-
   openModal(`
     <div class="modal-card">
       <h3>Habit templates</h3>
       <div class="template-grid">
-        ${templates.map((template) => `
-          <button class="template-card" type="button" data-action="add-template" data-template-name="${template.name}">
-            <div class="habit-icon" style="background:${template.color}">${template.icon}</div>
-            <strong>${template.name}</strong>
-            <div class="tiny-muted">${template.type}</div>
+        ${habitTemplates.map((tp) => `
+          <button class="template-card" type="button" data-action="add-template" data-template-name="${escapeHtml(tp.name)}">
+            <div class="habit-icon" style="background:${escapeHtml(tp.color)}">${escapeHtml(tp.icon)}</div>
+            <strong>${escapeHtml(tp.name)}</strong>
+            <div class="tiny-muted">${escapeHtml(tp.type)}</div>
           </button>
         `).join('')}
       </div>
@@ -207,27 +198,23 @@ export function renderTemplateLibrary() {
   `);
 }
 
-export function attachInitialHandlers() {
-  document.body.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-action]');
-    if (!target) return;
-
-    const action = target.dataset.action;
-    if (action === 'template-library') {
-      renderTemplateLibrary();
-    }
-    if (action === 'open-journal') {
-      state.currentView = 'journal';
-      renderApp();
-    }
-    if (action === 'log-day') {
-      showToast('Daily log updated');
-    }
-    if (action === 'export-json') {
-      showToast('Preparing export…');
-    }
-    if (action === 'close-modal' || target.dataset.close === 'close-modal') {
-      closeModal();
-    }
-  });
+export function openHabitForm(habit = null) {
+  const h = habit || createDefaultHabit();
+  const wd = h.schedule?.weekdays || [1, 2, 3, 4, 5];
+  const kind = h.schedule?.kind || 'daily';
+  openModal(`<div class="modal-card" role="dialog" aria-modal="true"><h3>${habit ? 'Edit habit' : 'New habit'}</h3>
+    <div class="journal-form">
+      <label><span>Name</span><input id="hfName" maxlength="40" value="${escapeHtml(h.name)}"></label>
+      <label><span>Icon</span><input id="hfIcon" maxlength="4" value="${escapeHtml(h.icon)}"></label>
+      <label><span>Color</span><input id="hfColor" type="color" value="${escapeHtml(h.color)}"></label>
+      <label><span>Type</span><select id="hfType">${['yesno', 'counter', 'numeric', 'timer'].map((x) => `<option value="${x}" ${h.type === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      <label><span>Target</span><input id="hfTarget" type="number" min="0.1" step="any" value="${h.targetValue}"></label>
+      <label><span>Schedule</span><select id="hfKind">${[['daily', 'Every day'], ['weekdays', 'Selected weekdays'], ['everyN', 'Every N days']].map(([v, l]) => `<option value="${v}" ${kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label><span>Every N days</span><input id="hfEvery" type="number" min="1" value="${h.schedule?.every || 2}"></label>
+      <div style="display:flex;flex-wrap:wrap;gap:.6rem">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((n, i) => `<label style="display:flex;gap:.3rem"><input type="checkbox" class="hfDay" value="${i}" ${wd.includes(i) ? 'checked' : ''}>${n}</label>`).join('')}</div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" type="button" data-close="close-modal">Cancel</button>
+      <button class="primary-btn" type="button" data-action="save-habit" data-habit-id="${escapeHtml(h.id)}">Save</button>
+    </div></div>`);
 }
